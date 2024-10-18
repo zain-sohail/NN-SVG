@@ -1,22 +1,6 @@
 
 function FCNN() {
 
-    /////////////////////////////////////////////////////////////////////////////
-                        ///////    Helper Functions    ///////
-    /////////////////////////////////////////////////////////////////////////////
-
-    let range = n => [...Array(n).keys()];
-
-    let nWise = (n, array) => {
-        iterators = Array(n).fill().map(() => array[Symbol.iterator]());
-        iterators.forEach((it, index) => Array(index).fill().forEach(() => it.next()));
-        return Array(array.length - n + 1).fill().map(() => (iterators.map(it => it.next().value)));
-    };
-
-    let pairWise = (array) => nWise(2, array);
-
-    let flatten = (array) => array.reduce((flat, toFlatten) => (flat.concat(Array.isArray(toFlatten) ? flatten(toFlatten) : toFlatten)), []);
-
     let randomWeight = () => Math.random() * 2 - 1;
 
 
@@ -58,8 +42,11 @@ function FCNN() {
     var largest_layer_width = 0;
     var nnDirection = 'right';
     var showBias = false;
-
     var showLabels = true;
+    var showArrowheads = false;
+    var arrowheadStyle = "empty";
+    var bezierCurves = false;
+
     let sup_map = {'0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹'};
     let sup = (s) => Array.prototype.map.call(s, (d) => (d in sup_map && sup_map[d]) || d).join('');
 
@@ -67,37 +54,51 @@ function FCNN() {
     var nominal_text_size = 12;
     var textWidth = 70;
 
+    var marker = svg.append("svg:defs").append("svg:marker")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("markerWidth", 7)
+        .attr("markerHeight", 7)
+        .attr("orient", "auto");
+
+    var arrowhead = marker.append("svg:path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .style("stroke", defaultEdgeColor);
+
     var link = g.selectAll(".link");
     var node = g.selectAll(".node");
     var text = g.selectAll(".text");
 
     /////////////////////////////////////////////////////////////////////////////
-                          ///////    Draw Graph    ///////
+                          ///////    Methods    ///////
     /////////////////////////////////////////////////////////////////////////////
 
     function redraw({architecture_=architecture,
                      showBias_=showBias,
-                     showLabels_=showLabels}={}) {
+                     showLabels_=showLabels,
+                     bezierCurves_=bezierCurves,
+                     }={}) {
 
         architecture = architecture_;
         showBias = showBias_;
         showLabels = showLabels_;
+        bezierCurves = bezierCurves_;
 
         graph.nodes = architecture.map((layer_width, layer_index) => range(layer_width).map(node_index => {return {'id':layer_index+'_'+node_index,'layer':layer_index,'node_index':node_index}}));
-        graph.links = pairWise(graph.nodes).map((nodes) => nodes[0].map(left => nodes[1].map(right => {return right.node_index >= 0 ? {'source':left.id,'target':right.id,'weight':randomWeight()} : {} })));
+        graph.links = pairWise(graph.nodes).map((nodes) => nodes[0].map(left => nodes[1].map(right => {return right.node_index >= 0 ? {'id':left.id+'-'+right.id, 'source':left.id,'target':right.id,'weight':randomWeight()} : null })));
         graph.nodes = flatten(graph.nodes);
-        graph.links = flatten(graph.links).filter(l => (Object.keys(l).length > 0 && (showBias ? (parseInt(l['target'].split('_')[0]) !== architecture.length-1 ? (l['target'].split('_')[1] !== '0') : true) : true)));
+        graph.links = flatten(graph.links).filter(l => (l && (showBias ? (parseInt(l['target'].split('_')[0]) !== architecture.length-1 ? (l['target'].split('_')[1] !== '0') : true) : true)));
 
         label = architecture.map((layer_width, layer_index) => { return {'id':'layer_'+layer_index+'_label','layer':layer_index,'text':textFn(layer_index, layer_width)}});
 
-        link = link.data(graph.links);
+        link = link.data(graph.links, d => d.id);
         link.exit().remove();
         link = link.enter()
-                   .insert("line", ".node")
+                   .insert("path", ".node")
                    .attr("class", "link")
                    .merge(link);
 
-        node = node.data(graph.nodes);
+        node = node.data(graph.nodes, d => d.id);
         node.exit().remove();
         node = node.enter()
                    .append("circle")
@@ -108,23 +109,28 @@ function FCNN() {
                    .on("mouseup", remove_focus)
                    .merge(node);
 
-        text = text.data(label);
-        if (text.empty()) { text = text.enter().append("text").attr("class", "text"); }
-        text = text.text(function(d) { return (showLabels ? d.text : ""); })
+        text = text.data(label, d => d.id);
+        text.exit().remove();
+        text = text.enter()
+                   .append("text")
+                   .attr("class", "text")
                    .attr("dy", ".35em")
                    .style("font-size", nominal_text_size+"px")
-                   .merge(text);
+                   .merge(text)
+                   .text(function(d) { return (showLabels ? d.text : ""); });
 
         style();
     }
 
     function redistribute({betweenNodesInLayer_=betweenNodesInLayer,
                            betweenLayers_=betweenLayers,
-                           nnDirection_=nnDirection}={}) {
+                           nnDirection_=nnDirection,
+                           bezierCurves_=bezierCurves}={}) {
 
         betweenNodesInLayer = betweenNodesInLayer_;
         betweenLayers = betweenLayers_;
         nnDirection = nnDirection_;
+        bezierCurves = bezierCurves_;
 
         layer_widths = architecture.map((layer_width, i) => layer_width * nodeDiameter + (layer_width - 1) * betweenNodesInLayer[i])
 
@@ -145,10 +151,26 @@ function FCNN() {
         node.attr('cx', function(d) { return x(d.layer, d.node_index); })
             .attr('cy', function(d) { return y(d.layer, d.node_index); });
 
-        link.attr("x1", function(d) { return x(...indices_from_id(d.source)); })
-            .attr("y1", function(d) { return y(...indices_from_id(d.source)); })
-            .attr("x2", function(d) { return x(...indices_from_id(d.target)); })
-            .attr("y2", function(d) { return y(...indices_from_id(d.target)); });
+        if(bezierCurves) {
+                link.attr("d", (d) => {
+                let source = [x(...indices_from_id(d.source)), y(...indices_from_id(d.source))];
+                let target = [x(...indices_from_id(d.target)), y(...indices_from_id(d.target))];
+            
+                // control points
+                let cp1 = [(source[0] + target[0]) / 2, source[1]];
+                let cp2 = [(source[0] + target[0]) / 2, target[1]];
+            
+                return "M" + source[0] + "," + source[1]
+                    + "C" + cp1[0] + "," + cp1[1]
+                    + " " + cp2[0] + "," + cp2[1]
+                    + " " + target[0] + "," + target[1];
+            });
+        } else {
+            link.attr("d", (d) => "M" + x(...indices_from_id(d.source)) + "," +
+                                        y(...indices_from_id(d.source)) + ", " +
+                                        x(...indices_from_id(d.target)) + "," +
+                                        y(...indices_from_id(d.target)));
+        }
 
         text.attr("x", function(d) { return (nnDirection === 'right' ? x(d.layer, d.node_index) - textWidth/2 : w/2 + largest_layer_width/2 + 20 ); })
             .attr("y", function(d) { return (nnDirection === 'right' ? h/2 + largest_layer_width/2 + 20       : y(d.layer, d.node_index) ); });
@@ -165,7 +187,10 @@ function FCNN() {
                     defaultEdgeColor_=defaultEdgeColor,
                     nodeDiameter_=nodeDiameter,
                     nodeColor_=nodeColor,
-                    nodeBorderColor_=nodeBorderColor}={}) {
+                    nodeBorderColor_=nodeBorderColor,
+                    showArrowheads_=showArrowheads,
+                    arrowheadStyle_=arrowheadStyle,
+                    bezierCurves_=bezierCurves}={}) {
         // Edge Width
         edgeWidthProportional   = edgeWidthProportional_;
         edgeWidth               = edgeWidth_;
@@ -183,6 +208,11 @@ function FCNN() {
         nodeDiameter            = nodeDiameter_;
         nodeColor               = nodeColor_;
         nodeBorderColor         = nodeBorderColor_;
+        // Arrowheads
+        showArrowheads          = showArrowheads_;
+        arrowheadStyle          = arrowheadStyle_;
+        // Bezier curves
+        bezierCurves            = bezierCurves_;
 
         link.style("stroke-width", function(d) {
             if (edgeWidthProportional) { return weightedEdgeWidth(Math.abs(d.weight)); } else { return edgeWidth; }
@@ -196,36 +226,17 @@ function FCNN() {
             if (edgeColorProportional) { return weightedEdgeColor(d.weight); } else { return defaultEdgeColor; }
         });
 
+        link.style("fill", "none");
+
+        link.attr('marker-end', showArrowheads ? "url(#arrow)" : '');
+        marker.attr('refX', nodeDiameter*1.4 + 12);
+        arrowhead.style("fill", arrowheadStyle === 'empty' ? "none" : defaultEdgeColor);
+
         node.attr("r", nodeDiameter/2);
         node.style("fill", nodeColor);
         node.style("stroke", nodeBorderColor);
 
     }
-
-    /////////////////////////////////////////////////////////////////////////////
-                          ///////    Zoom    ///////
-    /////////////////////////////////////////////////////////////////////////////
-
-    svg.call(d3.zoom()
-               .scaleExtent([1 / 2, 8])
-               .on("zoom", zoomed));
-
-    function zoomed() { g.attr("transform", d3.event.transform); }
-
-
-    /////////////////////////////////////////////////////////////////////////////
-                          ///////    Resize    ///////
-    /////////////////////////////////////////////////////////////////////////////
-
-    function resize() {
-        w = window.innerWidth;
-        h = window.innerHeight;
-        svg.attr("width", w).attr("height", h);
-    }
-
-    d3.select(window).on("resize", resize)
-
-    resize();
 
     /////////////////////////////////////////////////////////////////////////////
                           ///////    Focus    ///////
@@ -242,6 +253,26 @@ function FCNN() {
         node.style("opacity", 1);
         link.style("opacity", function () { return edgeOpacity; })
     }
+
+    /////////////////////////////////////////////////////////////////////////////
+                          ///////    Zoom & Resize   ///////
+    /////////////////////////////////////////////////////////////////////////////
+
+    svg.call(d3.zoom()
+               .scaleExtent([1 / 2, 8])
+               .on("zoom", zoomed));
+
+    function zoomed() { g.attr("transform", d3.event.transform); }
+
+    function resize() {
+        w = window.innerWidth;
+        h = window.innerHeight;
+        svg.attr("width", w).attr("height", h);
+    }
+
+    d3.select(window).on("resize", resize)
+
+    resize();
 
     /////////////////////////////////////////////////////////////////////////////
                           ///////    Return    ///////
