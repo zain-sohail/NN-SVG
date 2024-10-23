@@ -38,7 +38,7 @@ function UNet() {
     var legY = 0.2;
 
 
-    var line_material = new THREE.LineBasicMaterial( { 'color':0x000000 } );
+    var line_material = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
     var vol_material = new THREE.MeshBasicMaterial( {'color':clr_vol, 'side':THREE.DoubleSide, 'transparent':true, 'opacity':rectOpacity, 'depthWrite':false, 'needsUpdate':true} );
 
     var architecture = [];
@@ -145,23 +145,6 @@ function UNet() {
         }
         return layer_offsets
     }
-    function createThickLine(start, end, color = 0x000000, radius = 1) {
-        let direction = new THREE.Vector3().subVectors(end, start);
-        let arrowLength = direction.length();
-        let cylinderGeometry = new THREE.CylinderGeometry(radius, radius, arrowLength, 16);
-        let material = new THREE.MeshBasicMaterial({ color: color });
-        let cylinder = new THREE.Mesh(cylinderGeometry, material);
-        
-        // Position cylinder between points
-        let midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-        cylinder.position.copy(midpoint);
-        
-        // Align the cylinder in the direction of the vector
-        cylinder.lookAt(end);
-        cylinder.rotateX(Math.PI / 2);  // Rotate to align with axis
-    
-        return cylinder;
-    }
 
     function redraw({architecture_=architecture,
                      connections_=connections,
@@ -248,12 +231,9 @@ function UNet() {
                 }
                 
                 headLength = betweenLayers/3;
-                headWidth = 5;
-                let start = new THREE.Vector3(0, level * lvl_height, layer_offsets[index] + depthFn(layer['depth']) / 2);
-                let end = new THREE.Vector3(0, level * lvl_height, layer_offsets[index + 1] - depthFn(layer['depth']) / 2);
-                
-                let thickLine = createThickLine(start, end, colors[layer['op']], 5);  // Radius = 5 for thicker lines
-                layers.add(thickLine);
+                headWidth = 10;
+                arrow = new THREE.ArrowHelper( direction, origin, length, colors[layer['op']], headLength, headWidth );
+                layers.add( arrow );
              }
 
             if (showDims) {
@@ -284,12 +264,9 @@ function UNet() {
             origin = new THREE.Vector3( 0,lvl_height*lvls[layer['from']] , layer_offsets[layer['from']] + half_depth_from);
             length = layer_offsets[layer['to']]-half_depth_to - layer_offsets[layer['from']] -half_depth_from - (70./(2*half_depth_to));
             headLength = betweenLayers/3;
-            headWidth = 5;
-            let start = new THREE.Vector3(0, level * lvl_height, layer_offsets[index] + depthFn(layer['depth']) / 2);
-            let end = new THREE.Vector3(0, level * lvl_height, layer_offsets[index + 1] - depthFn(layer['depth']) / 2);
-            
-            let thickLine = createThickLine(start, end, colors[layer['op']], 5);  // Radius = 5 for thicker lines
-            layers.add(thickLine);
+            headWidth = 10;
+            arrow = new THREE.ArrowHelper( direction, origin, length, clr_conn, headLength, headWidth );
+            layers.add( arrow );
 
         });
 
