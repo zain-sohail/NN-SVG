@@ -38,7 +38,7 @@ function UNet() {
     var legY = 0.2;
 
 
-    var line_material = new THREE.LineBasicMaterial( { 'color':0x000000 } );
+    var line_material = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
     var vol_material = new THREE.MeshBasicMaterial( {'color':clr_vol, 'side':THREE.DoubleSide, 'transparent':true, 'opacity':rectOpacity, 'depthWrite':false, 'needsUpdate':true} );
 
     var architecture = [];
@@ -231,7 +231,7 @@ function UNet() {
                 }
                 
                 headLength = betweenLayers/3;
-                headWidth = 5;
+                headWidth = 10;
                 arrow = new THREE.ArrowHelper( direction, origin, length, colors[layer['op']], headLength, headWidth );
                 layers.add( arrow );
              }
@@ -264,7 +264,7 @@ function UNet() {
             origin = new THREE.Vector3( 0,lvl_height*lvls[layer['from']] , layer_offsets[layer['from']] + half_depth_from);
             length = layer_offsets[layer['to']]-half_depth_to - layer_offsets[layer['from']] -half_depth_from - (70./(2*half_depth_to));
             headLength = betweenLayers/3;
-            headWidth = 5;
+            headWidth = 10;
             arrow = new THREE.ArrowHelper( direction, origin, length, clr_conn, headLength, headWidth );
             layers.add( arrow );
 
